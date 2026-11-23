@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+# book-derived data & model weights are intentionally not in this public repo
+*.safetensors
+*.gguf
+chunks.json
+answers.md
+*.jsonl
