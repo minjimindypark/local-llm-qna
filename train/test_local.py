@@ -1,5 +1,5 @@
-"""로컬 테스터: 질문→e5 검색 top-5→학습된 4B(LoRA) 답변. 민지가 직접 쳐본다.
-  ~/venvs/d-utest/bin/python test_local.py            # http://127.0.0.1:8799
+"""로컬 테스터: 질문→e5 검색 top-5→학습된 4B(LoRA) 답변. 로컬에서 눈으로 확인하는 용도.
+  python test_local.py            # http://127.0.0.1:8799
 근거 조각도 같이 보여줘서 '왜 그 답이 나왔는지(엉뚱한 일화 집었는지)'를 눈으로 본다. CPU라 답 1개 1~2분.
 """
 import glob, json, os, re, sys, torch, torch.nn.functional as F
@@ -53,7 +53,7 @@ PAGE = """<!doctype html><meta charset=utf-8><meta name=viewport content="width=
 textarea,button{font:inherit;width:100%;box-sizing:border-box;padding:10px;margin:6px 0}#out{white-space:pre-wrap;background:#f3f4f6;border-radius:10px;padding:14px;margin-top:12px}
 .ev{font-size:.85em;opacity:.8;border-top:1px solid #ccc;margin-top:10px;padding-top:8px}</style>
 <h2>로컬 4B 테스트 <small id=cfg></small></h2><p>질문을 치면 검색된 근거 5개로 학습된 모델이 답해요. CPU라 1~2분 걸려요.</p>
-<textarea id=q rows=2 placeholder="예) 악플 먹은 썰 뭐임?"></textarea><button id=go>물어보기</button>
+<textarea id=q rows=2 placeholder="예) 토익 800점인데 시작할 수 있나요?"></textarea><button id=go>물어보기</button>
 <div id=out></div>
 <script>const $=i=>document.getElementById(i);fetch('/cfg').then(r=>r.text()).then(t=>$('cfg').textContent=t);
 $('go').onclick=async()=>{const q=$('q').value.trim();if(!q)return;$('go').disabled=1;$('out').textContent='생각 중… (1~2분)';

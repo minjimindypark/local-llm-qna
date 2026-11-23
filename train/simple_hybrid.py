@@ -40,7 +40,7 @@ def run(tag, layer=None, alpha=0.0, dola=None):
         with torch.no_grad(): g=model.generate(input_ids=ids_of(x),**g_kw)
         y=tok.decode(g[0,ids_of(x).shape[1]:],skip_special_tokens=True).strip()
         out.append({**{k:x[k] for k in["q","picked","kind","style","src","target"]},"out":y})
-    json.dump(out,open(f"out_{tag}.jsonl","w",encoding="utf-8")) if False else open(f"out_{tag}_e2e.jsonl","w",encoding="utf-8").write("".join(json.dumps(z,ensure_ascii=False)+"\n" for z in out))
+    open(f"out_{tag}_e2e.jsonl","w",encoding="utf-8").write("".join(json.dumps(z,ensure_ascii=False)+"\n" for z in out))
     print(tag,"끝",flush=True)
 MODE=sys.argv[1] if len(sys.argv)>1 else "all"
 if MODE=="all":

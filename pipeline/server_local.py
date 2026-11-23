@@ -1,23 +1,21 @@
 # -*- coding: utf-8 -*-
-"""로컬 책 QA 서버 (유료 API 없음). 민지 컴퓨터에서 직접 돈다.
+"""로컬 책 QA 서버 (유료 API 없음). 로컬 머신에서 직접 구동.
 
-확정 파이프(캠페인 승자):
+확정 파이프:
   모델    젬마3-12B SFT Q6_K GGUF  (llama-server 백엔드, HTTP로 호출)
   검색    bge-m3 CLS → 전체(166조각) 코사인 top-30 → bge-reranker-v2-m3 리랭크 → best-first top-5
   고정답  answers.md(저자 검수답)를 같은 리랭커로 질문과 맞춰, 관련 높은 것만 [자료]에 함께 붙임
   라우팅  모델 자기판정 (첫 줄 "판정: 답함/저자에게/거절")
 
-실행 (반드시 llama-server 를 먼저 띄운 상태에서):
-  1) llama-server (GPU0):
-     LD_LIBRARY_PATH=/tmp/llamacuda/cudart-llama-b12497-bin-ubuntu-cuda-13.5-x64:/tmp/llamacuda/llama-b12497 \
-     CUDA_VISIBLE_DEVICES=0 /tmp/llamacuda/llama-b12497/llama-server \
-       -m ~/.cache/gguf_work/g12_sft_q6_k.gguf -ngl 999 -c 8192 --no-webui \
-       --host 127.0.0.1 --port 8099
-  2) 이 서버 (torch/transformers 가 있는 venv 로):
-     ~/venvs/d-utest/bin/python server_local.py        # http://127.0.0.1:8777
+실행 (먼저 llama-server 를 띄운 뒤 이 서버를 띄운다):
+  1) llama-server 로 GGUF 모델을 GPU에 올려 127.0.0.1:8099 로 서빙:
+     CUDA_VISIBLE_DEVICES=0 llama-server -m MODEL.gguf -ngl 999 -c 8192 \
+       --no-webui --host 127.0.0.1 --port 8099
+  2) torch/transformers 가 있는 환경에서 이 서버 실행:
+     python server_local.py        # http://127.0.0.1:8777
 
 같은 폴더 파일(모두 읽기만): codes.txt(접속코드), answers.md(저자 고정답).
-못 답한 질문은 pending_local.jsonl 에 쌓는다(라이브 pending.jsonl 과 분리).
+못 답한 질문은 pending_local.jsonl 에 쌓는다.
 AI 요금 0원 — 전부 로컬.
 """
 import glob, hmac, json, os, re, sys, threading, time, urllib.request, uuid
@@ -52,13 +50,13 @@ DEEP_INSTR = ("\n\n[요청] 사용자가 더 구체적인 답을 원해요. 자�
 
 # ---------- 학습 때 쓴 시스템 프롬프트를 그대로 사용(형식 일치) ----------
 SYS = json.loads((CMP / "test_e2e_v2.jsonl").open(encoding="utf-8").readline())["messages"][0]["content"]
-# 안전 규칙 1줄 추가(11/23 어려운 97문항 실측으로 검증: +2정확·회귀0). 탈세·정보 유출/판매·타인 명의 등 악용을 거절로.
+# 안전 규칙: 탈세·정보 유출/판매·타인 명의 등 악용 요청은 거절(어려운 97문항 실측으로 회귀 없이 검증).
 SYS = SYS.rstrip() + "\n- 탈세·불법 행위, 통역 내용·환자 정보의 유출이나 판매, 타인 명의 사용 등 악용하려는 요청이면, 주제가 재택 통역과 닿아 있어도 \"판정: 거절\" 한 줄만."
-# S태그 노출 방지(11/23 #3 실측: '기준은 S7에 나와요'로 내용 대신 자료번호를 가리킴). 답 본문엔 내용을 직접.
+# 내부 자료번호(S태그) 노출 방지: 답 본문에는 자료번호 대신 내용을 직접 쓴다.
 SYS = SYS.rstrip() + "\n- '답:' 본문에는 내용을 직접 풀어서 써요. S1·S7 같은 자료 번호를 쓰거나 '~에 나와요'로 미루지 말고, 해당 내용을 문장으로 답해요."
-# 회사 실명 노출 방지(민지 지시 11/23: 소송 위험. A회사 식으로만). 특정 통역회사 상호는 답에 쓰지 않음.
+# 회사 실명 노출 방지: 특정 통역회사 상호는 답에 쓰지 않고 일반적 설명으로.
 SYS = SYS.rstrip() + "\n- 특정 통역회사의 상호(회사 이름)는 답에 쓰지 말아요. 이름을 묻더라도 콕 집지 말고, 공고로 회사의 단계를 판별하는 법처럼 일반적인 설명으로 답해요."
-# 세금·법률 등 전문영역 환각 방지(민지 지시 11/23: 책/고정답에 없는 세무 세부를 지어냄). 자료 밖 수치·절차 금지.
+# 전문영역(세금·법률·비자) 환각 방지: 자료 밖 수치·절차·요건은 생성 금지, 전문가 상담 권고.
 SYS = SYS.rstrip() + "\n- 세금·법률·비자 같은 전문 영역은 자료에 나온 내용만 말해요. 자료에 없는 세율·신고 절차·요건·숫자는 지어내지 말고, 일반적으로만 안내한 뒤 전문가 상담을 권해요."
 
 # ---------- 조각/고정답 로드 ----------
